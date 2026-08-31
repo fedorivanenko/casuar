@@ -17,9 +17,9 @@ STRICT SOURCE FORMAT REQUIREMENTS:
 
 Use only the Python standard library unless the specification explicitly requires otherwise. No network, subprocesses, filesystem access, dynamic imports, eval, or exec. Tests must cover nominal behavior, boundaries implied by the spec, and malformed/missing inputs.`;
 
-export async function compileModel(spec: ModelSpec): Promise<GeneratedModel> {
+export async function compileModel(spec: ModelSpec, model = DEFAULT_COMPILER_MODEL): Promise<GeneratedModel> {
   const { object } = await generateObject({
-    model: DEFAULT_COMPILER_MODEL,
+    model,
     schema: generatedModelSchema,
     system: SYSTEM,
     prompt: `Compile this ModelSpec to Python:\n${JSON.stringify(spec, null, 2)}`,
