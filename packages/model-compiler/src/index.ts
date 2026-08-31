@@ -1,29 +1,52 @@
-import { generateObject } from 'ai';
-import { generatedModelSchema, type GeneratedModel, type ModelSpec } from '../../model-spec/src/index.js';
+import { generateText } from 'ai';
+import type { GeneratedModel, ModelSpec } from '../../model-spec/src/index.js';
 
 export const DEFAULT_COMPILER_MODEL = process.env.CASUAR_COMPILER_MODEL ?? 'zai/glm-5.3-flash';
 
-const SYSTEM = `You are Casuar's model compiler. Translate an already-specified mechanistic model into small, deterministic Python. Do not invent medical or scientific claims. Preserve equations, units, assumptions, and validity constraints exactly.
+const IMPLEMENTATION_SYSTEM = `You are Casuar's model compiler. Translate an already-specified mechanistic model into a small, deterministic Python 3.13 module.
 
-Return:
-- one implementation module defining calculate(inputs: dict) -> dict
-- one Python unittest module named conceptually test_model.py that imports calculate from model
+Your entire response must be the contents of model.py.
+Do not return JSON. Do not return a filename. Do not use Markdown or fenced code blocks.
+Define calculate(inputs: dict) -> dict.
+Preserve the supplied equations, units, assumptions, and validity constraints exactly.
+Do not invent medical or scientific claims.
+Use only the Python standard library unless the ModelSpec explicitly requires otherwise.
+No network, subprocesses, filesystem access, dynamic imports, eval, or exec.
+Use plain ASCII quotes and normal Python newlines/indentation.`;
 
-STRICT SOURCE FORMAT REQUIREMENTS:
-- Return raw Python source text, not Markdown and not fenced code blocks.
-- Use plain ASCII quotes only: ' and \". Never use curly/smart quotes.
-- Preserve real newline characters and normal indentation. Do not collapse the module onto one line.
-- The implementation and tests must both be valid Python 3.13 source files.
+const TEST_SYSTEM = `You are Casuar's test compiler. Produce a Python 3.13 unittest module for the supplied ModelSpec and model.py implementation.
 
-Use only the Python standard library unless the specification explicitly requires otherwise. No network, subprocesses, filesystem access, dynamic imports, eval, or exec. Tests must cover nominal behavior, boundaries implied by the spec, and malformed/missing inputs.`;
+Your entire response must be the contents of test_model.py.
+Do not return JSON. Do not return a filename. Do not use Markdown or fenced code blocks.
+Import calculate from model.
+Test the exact specified equation/behavior, validity constraints, malformed inputs, and missing inputs where applicable.
+Use only the Python standard library.
+Use plain ASCII quotes and normal Python newlines/indentation.`;
+
+function normalizeSource(text: string): string {
+  const trimmed = text.trim();
+  const fenced = trimmed.match(/^```(?:python)?\s*\n([\s\S]*?)\n```$/i);
+  return (fenced ? fenced[1] : trimmed).trim() + '\n';
+}
 
 export async function compileModel(spec: ModelSpec, model = DEFAULT_COMPILER_MODEL): Promise<GeneratedModel> {
-  const { object } = await generateObject({
+  const implementation = await generateText({
     model,
-    schema: generatedModelSchema,
-    system: SYSTEM,
-    prompt: `Compile this ModelSpec to Python:\n${JSON.stringify(spec, null, 2)}`,
+    system: IMPLEMENTATION_SYSTEM,
+    prompt: `ModelSpec:\n${JSON.stringify(spec, null, 2)}`,
   });
 
-  return object;
+  const python = normalizeSource(implementation.text);
+
+  const testsGeneration = await generateText({
+    model,
+    system: TEST_SYSTEM,
+    prompt: `ModelSpec:\n${JSON.stringify(spec, null, 2)}\n\nmodel.py:\n${python}`,
+  });
+
+  return {
+    python,
+    tests: normalizeSource(testsGeneration.text),
+    notes: [],
+  };
 }
