@@ -3,6 +3,7 @@ import type { GeneratedModel } from '../../model-spec/src/index.js';
 
 export type SandboxExecution = {
   sandboxName: string;
+  syntax?: { exitCode: number; stdout: string; stderr: string };
   tests: { exitCode: number; stdout: string; stderr: string };
   result?: unknown;
 };
@@ -33,7 +34,22 @@ export async function executeGeneratedModel(
       throw new Error(`Failed to write generated model: ${await write.stderr()}`);
     }
 
-    const test = await sandbox.runCommand('python', ['-m', 'unittest', '-v', 'test_model.py']);
+    const syntax = await sandbox.runCommand('python', ['-m', 'py_compile', 'model.py', 'test_model.py']);
+    const syntaxResult = {
+      exitCode: syntax.exitCode,
+      stdout: await syntax.stdout(),
+      stderr: await syntax.stderr(),
+    };
+
+    if (syntax.exitCode !== 0) {
+      return {
+        sandboxName: sandbox.name,
+        syntax: syntaxResult,
+        tests: { exitCode: syntax.exitCode, stdout: '', stderr: syntaxResult.stderr },
+      };
+    }
+
+    const test = await sandbox.runCommand('python', ['-m', 'unittest', 'discover', '-v', '-p', 'test_model.py']);
     const testResult = {
       exitCode: test.exitCode,
       stdout: await test.stdout(),
@@ -41,7 +57,7 @@ export async function executeGeneratedModel(
     };
 
     if (test.exitCode !== 0) {
-      return { sandboxName: sandbox.name, tests: testResult };
+      return { sandboxName: sandbox.name, syntax: syntaxResult, tests: testResult };
     }
 
     const encodedInputs = b64(JSON.stringify(inputs));
@@ -54,6 +70,7 @@ export async function executeGeneratedModel(
 
     return {
       sandboxName: sandbox.name,
+      syntax: syntaxResult,
       tests: testResult,
       result: JSON.parse((await run.stdout()).trim()),
     };
