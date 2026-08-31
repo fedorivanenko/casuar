@@ -1,0 +1,20 @@
+{
+  "name": "casuar",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.15.0",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "demo": "tsx apps/demo/src/index.ts"
+  },
+  "dependencies": {
+    "@vercel/sandbox": "latest",
+    "ai": "latest",
+    "zod": "latest"
+  },
+  "devDependencies": {
+    "@types/node": "latest",
+    "tsx": "latest",
+    "typescript": "latest"
+  }
+}
