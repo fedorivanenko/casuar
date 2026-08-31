@@ -19,7 +19,7 @@ export async function reviewModel(spec: ModelSpec, generated: GeneratedModel): P
   const { object } = await generateObject({
     model: DEFAULT_REVIEWER_MODEL,
     schema: reviewSchema,
-    system: `You independently review generated scientific calculation code. Check only whether the Python faithfully implements the supplied ModelSpec, preserves units/equations/assumptions, is deterministic, and avoids unsafe capabilities. Do not improve or invent the scientific theory. passed must be false for any semantic mismatch, unsafe operation, missing required behavior, or clearly inadequate tests.`,
+    system: `You independently review generated scientific calculation code. Check whether the supplied Python is syntactically plausible Python 3.13 source, faithfully implements the supplied ModelSpec, preserves units/equations/assumptions, is deterministic, and avoids unsafe capabilities. Do not improve or invent the scientific theory. passed must be false for syntax/source-format problems (including smart quotes or collapsed source), any semantic mismatch, unsafe operation, missing required behavior, or clearly inadequate tests.`,
     prompt: `ModelSpec:\n${JSON.stringify(spec, null, 2)}\n\nImplementation:\n${generated.python}\n\nTests:\n${generated.tests}`,
   });
 
