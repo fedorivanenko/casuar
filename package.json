@@ -8,13 +8,13 @@
     "demo": "tsx apps/demo/src/index.ts"
   },
   "dependencies": {
+    "@types/node": "latest",
     "@vercel/sandbox": "latest",
     "ai": "latest",
+    "typescript": "latest",
     "zod": "latest"
   },
   "devDependencies": {
-    "@types/node": "latest",
-    "tsx": "latest",
-    "typescript": "latest"
+    "tsx": "latest"
   }
 }

@@ -1,4 +1,3 @@
-import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { buildAndRunModel } from '../packages/runtime/src/index.js';
 import { modelSpecSchema } from '../packages/model-spec/src/index.js';
 
@@ -15,7 +14,7 @@ const spec = modelSpecSchema.parse({
   evidence: [],
 });
 
-export default async function handler(_req: VercelRequest, res: VercelResponse) {
+export default async function handler(_req: unknown, res: any) {
   const startedAt = Date.now();
 
   try {
