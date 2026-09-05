@@ -15,7 +15,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     res.statusCode = 401;
     res.setHeader(
       'WWW-Authenticate',
-      'Bearer resource_metadata="https://casuar-jet.vercel.app/.well-known/oauth-protected-resource", scope="casuar:read casuar:write"'
+      'Bearer resource_metadata="https://casuar-jet.vercel.app/.well-known/oauth-protected-resource/mcp", scope="casuar:read casuar:write"'
     );
     res.setHeader('Content-Type', 'application/json');
     res.end(JSON.stringify({ error: 'unauthorized' }));
