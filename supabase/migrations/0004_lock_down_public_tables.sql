@@ -1,0 +1,12 @@
+alter table objects enable row level security;
+alter table concepts enable row level security;
+alter table relation_types enable row level security;
+alter table claims enable row level security;
+alter table sources enable row level security;
+alter table claim_evidence enable row level security;
+alter table research_projects enable row level security;
+alter table research_questions enable row level security;
+alter table research_jobs enable row level security;
+alter table subjects enable row level security;
+alter table observations enable row level security;
+alter table inferred_states enable row level security;
