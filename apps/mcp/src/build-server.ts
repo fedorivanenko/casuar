@@ -3,13 +3,22 @@ import { z } from 'zod';
 import { createCasuarDb } from '../../../packages/db/src/client.js';
 import { CasuarService } from '../../../packages/core/src/service.js';
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 function text(value: unknown) {
   return { content: [{ type: 'text' as const, text: JSON.stringify(value, null, 2) }] };
 }
 
 export function buildCasuarMcpServer() {
-  const service = new CasuarService(createCasuarDb());
-  const server = new McpServer({ name: 'casuar', version: '0.4.0' });
+  const db = createCasuarDb();
+  const service = new CasuarService(db);
+  const server = new McpServer({ name: 'casuar', version: '0.5.0' });
+
+  async function deleteById(table: string, id: string) {
+    const { data, error } = await db.from(table).delete().eq('id', id).select('*').maybeSingle();
+    if (error) throw error;
+    return data;
+  }
 
   server.tool('get_object', 'Get a canonical Casuar object by UUID or key.', { idOrKey: z.string() }, async ({ idOrKey }) =>
     text(await service.getObject(idOrKey))
@@ -29,6 +38,17 @@ export function buildCasuarMcpServer() {
     attributes: z.record(z.unknown()).optional()
   }, async (input) => text(await service.upsertObject(input)));
 
+  server.tool('delete_object', 'Delete a canonical Casuar object by UUID or key. Deletion fails if protected references still depend on it.', {
+    idOrKey: z.string().min(1)
+  }, async ({ idOrKey }) => {
+    const query = db.from('objects').delete();
+    const { data, error } = UUID_RE.test(idOrKey)
+      ? await query.eq('id', idOrKey).select('*').maybeSingle()
+      : await query.eq('key', idOrKey).select('*').maybeSingle();
+    if (error) throw error;
+    return text(data);
+  });
+
   server.tool('list_subjects', 'List Casuar subjects.', {
     limit: z.number().int().min(1).max(100).default(50)
   }, async ({ limit }) => text(await service.listSubjects(limit)));
@@ -36,6 +56,10 @@ export function buildCasuarMcpServer() {
   server.tool('upsert_subject', 'Create or resolve a Casuar subject by stable external key.', {
     externalKey: z.string().min(1)
   }, async ({ externalKey }) => text(await service.upsertSubject(externalKey)));
+
+  server.tool('delete_subject', 'Delete a Casuar subject and cascade-delete its observations and inferred states.', {
+    subjectId: z.string().uuid()
+  }, async ({ subjectId }) => text(await deleteById('subjects', subjectId)));
 
   server.tool('list_observations', 'List direct observations for a subject, optionally filtered to one concept.', {
     subjectId: z.string().uuid(),
@@ -53,6 +77,10 @@ export function buildCasuarMcpServer() {
     sourceRef: z.string().optional(),
     conditions: z.record(z.unknown()).optional()
   }, async (input) => text(await service.createObservation(input)));
+
+  server.tool('delete_observation', 'Delete one direct observation by UUID.', {
+    observationId: z.string().uuid()
+  }, async ({ observationId }) => text(await deleteById('observations', observationId)));
 
   server.tool('list_inferred_states', 'List inferred states for a subject, optionally filtered to one concept.', {
     subjectId: z.string().uuid(),
@@ -74,6 +102,10 @@ export function buildCasuarMcpServer() {
     provenance: z.record(z.unknown()).optional()
   }, async (input) => text(await service.createInferredState(input)));
 
+  server.tool('delete_inferred_state', 'Delete one inferred state by UUID.', {
+    stateId: z.string().uuid()
+  }, async ({ stateId }) => text(await deleteById('inferred_states', stateId)));
+
   server.tool('list_research_projects', 'List Casuar research projects.', {
     limit: z.number().int().min(1).max(100).default(50)
   }, async ({ limit }) => text(await service.listResearchProjects(limit)));
@@ -85,6 +117,10 @@ export function buildCasuarMcpServer() {
     status: z.string().optional(),
     researchMode: z.string().optional()
   }, async (input) => text(await service.upsertResearchProject(input)));
+
+  server.tool('delete_research_project', 'Delete a research project and cascade-delete its questions and jobs.', {
+    projectId: z.string().uuid()
+  }, async ({ projectId }) => text(await deleteById('research_projects', projectId)));
 
   server.tool('list_research_questions', 'List research questions, optionally filtered by project or status.', {
     projectId: z.string().uuid().optional(),
@@ -104,6 +140,10 @@ export function buildCasuarMcpServer() {
     priority: z.number().optional(),
     readinessBlocking: z.boolean().optional()
   }, async (input) => text(await service.updateResearchQuestion(input)));
+
+  server.tool('delete_research_question', 'Delete a research question and cascade-delete jobs attached to it.', {
+    questionId: z.string().uuid()
+  }, async ({ questionId }) => text(await deleteById('research_questions', questionId)));
 
   server.tool('list_research_jobs', 'List research jobs, optionally filtered by project, question, or status.', {
     projectId: z.string().uuid().optional(),
@@ -128,6 +168,10 @@ export function buildCasuarMcpServer() {
     finishedAt: z.string().optional()
   }, async (input) => text(await service.updateResearchJob(input)));
 
+  server.tool('delete_research_job', 'Delete one research job by UUID.', {
+    jobId: z.string().uuid()
+  }, async ({ jobId }) => text(await deleteById('research_jobs', jobId)));
+
   server.tool('get_claim_with_evidence', 'Get one epistemic claim together with its linked evidence and source records.', {
     claimId: z.string().uuid()
   }, async ({ claimId }) => text(await service.getClaimWithEvidence(claimId)));
@@ -151,6 +195,14 @@ export function buildCasuarMcpServer() {
     notes: z.string().optional()
   }, async (input) => text(await service.updateClaim(input)));
 
+  server.tool('delete_claim', 'Delete an epistemic claim and cascade-delete its attached evidence.', {
+    claimId: z.string().uuid()
+  }, async ({ claimId }) => {
+    const { data, error } = await db.from('claims').delete().eq('object_id', claimId).select('*').maybeSingle();
+    if (error) throw error;
+    return text(data);
+  });
+
   server.tool('upsert_source', 'Create or update a research source by stable citation key.', {
     citationKey: z.string().min(1),
     title: z.string().min(1),
@@ -161,6 +213,10 @@ export function buildCasuarMcpServer() {
     studyDesign: z.string().optional(),
     metadata: z.record(z.unknown()).optional()
   }, async (input) => text(await service.upsertSource(input)));
+
+  server.tool('delete_source', 'Delete a research source by UUID. Deletion fails while claim evidence still references it.', {
+    sourceId: z.string().uuid()
+  }, async ({ sourceId }) => text(await deleteById('sources', sourceId)));
 
   server.tool('attach_claim_evidence', 'Attach structured supporting, opposing, null, or mixed evidence to a claim.', {
     claimId: z.string().uuid(),
@@ -178,6 +234,10 @@ export function buildCasuarMcpServer() {
     effectModifiers: z.record(z.unknown()).optional(),
     notes: z.string().optional()
   }, async (input) => text(await service.attachClaimEvidence(input)));
+
+  server.tool('delete_claim_evidence', 'Delete one claim-evidence attachment by UUID.', {
+    evidenceId: z.string().uuid()
+  }, async ({ evidenceId }) => text(await deleteById('claim_evidence', evidenceId)));
 
   return server;
 }
