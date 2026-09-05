@@ -9,7 +9,7 @@ function text(value: unknown) {
 
 export function buildCasuarMcpServer() {
   const service = new CasuarService(createCasuarDb());
-  const server = new McpServer({ name: 'casuar', version: '0.2.0' });
+  const server = new McpServer({ name: 'casuar', version: '0.3.0' });
 
   server.tool('get_object', 'Get a canonical Casuar object by UUID or key.', { idOrKey: z.string() }, async ({ idOrKey }) =>
     text(await service.getObject(idOrKey))
@@ -20,6 +20,14 @@ export function buildCasuarMcpServer() {
     kind: z.enum(['concept', 'state', 'event', 'observation', 'claim', 'source', 'research_project', 'research_question']).optional(),
     limit: z.number().int().min(1).max(100).default(20)
   }, async (input) => text(await service.searchObjects(input)));
+
+  server.tool('upsert_object', 'Create or update a canonical Casuar object by stable key. Safe for idempotent migration writes.', {
+    key: z.string().min(1),
+    kind: z.enum(['concept', 'state', 'event', 'observation', 'claim', 'source', 'research_project', 'research_question']),
+    label: z.string().min(1),
+    description: z.string().optional(),
+    attributes: z.record(z.unknown()).optional()
+  }, async (input) => text(await service.upsertObject(input)));
 
   server.tool('list_subjects', 'List Casuar subjects so observations can be addressed without direct database access.', {
     limit: z.number().int().min(1).max(100).default(50)

@@ -43,6 +43,30 @@ export class CasuarService {
     return [...merged.values()];
   }
 
+  async upsertObject(input: {
+    key: string;
+    kind: string;
+    label: string;
+    description?: string;
+    attributes?: Record<string, unknown>;
+  }) {
+    const payload = {
+      key: input.key,
+      kind: input.kind,
+      label: input.label,
+      description: input.description ?? null,
+      attributes: input.attributes ?? {}
+    };
+
+    const { data, error } = await this.db
+      .from('objects')
+      .upsert(payload, { onConflict: 'key' })
+      .select('*')
+      .single();
+    if (error) throw error;
+    return data;
+  }
+
   async listSubjects(limit = 50) {
     const safeLimit = Math.min(Math.max(limit, 1), 100);
     const { data, error } = await this.db.from('subjects').select('*').order('created_at').limit(safeLimit);
