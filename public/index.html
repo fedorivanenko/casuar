@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Casuar Graph</title>
+  <style>
+    :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #0b0d10; color: #f4f4f5; min-height: 100vh; }
+    header { height: 64px; display: flex; align-items: center; justify-content: space-between; padding: 0 22px; border-bottom: 1px solid #20242b; background: #0d1014; }
+    .brand { display: flex; align-items: center; gap: 12px; font-weight: 650; letter-spacing: -0.02em; }
+    .mark { width: 28px; height: 28px; border: 1px solid #3a414c; border-radius: 9px; display: grid; place-items: center; font-size: 12px; color: #b7c0ce; }
+    .status { color: #8b95a3; font-size: 13px; }
+    .shell { display: grid; grid-template-columns: minmax(0, 1fr) 320px; height: calc(100vh - 64px); }
+    .graph-wrap { position: relative; overflow: hidden; }
+    #graph { width: 100%; height: 100%; display: block; }
+    .empty, .auth { position: absolute; inset: 0; display: grid; place-items: center; padding: 24px; background: radial-gradient(circle at center, rgba(42,48,58,.25), transparent 52%); }
+    .card { width: min(440px, 100%); border: 1px solid #252a32; background: rgba(15,18,23,.94); border-radius: 18px; padding: 22px; box-shadow: 0 24px 80px rgba(0,0,0,.35); }
+    h1, h2, p { margin: 0; }
+    h1 { font-size: 18px; margin-bottom: 7px; }
+    p { color: #98a2b2; line-height: 1.5; font-size: 14px; }
+    .field { display: flex; gap: 8px; margin-top: 18px; }
+    input { min-width: 0; flex: 1; background: #0b0d10; color: white; border: 1px solid #2a3039; border-radius: 10px; padding: 11px 12px; outline: none; }
+    input:focus { border-color: #566273; }
+    button { border: 0; border-radius: 10px; padding: 11px 14px; background: #f4f4f5; color: #111317; font-weight: 650; cursor: pointer; }
+    aside { border-left: 1px solid #20242b; background: #0d1014; padding: 18px; overflow: auto; }
+    .eyebrow { color: #727d8c; text-transform: uppercase; letter-spacing: .12em; font-size: 10px; margin-bottom: 8px; }
+    #detailTitle { font-size: 18px; margin-bottom: 6px; word-break: break-word; }
+    .kind { display: inline-flex; border: 1px solid #2a3039; border-radius: 999px; padding: 4px 8px; color: #aab3c0; font-size: 11px; margin: 8px 0 16px; }
+    .meta { margin-top: 18px; display: grid; gap: 14px; }
+    .row span { display: block; color: #667181; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 5px; }
+    .row div { color: #c8ced8; font-size: 13px; line-height: 1.45; word-break: break-word; }
+    pre { white-space: pre-wrap; color: #9ea8b7; font-size: 12px; margin: 0; }
+    .legend { position: absolute; left: 16px; bottom: 16px; display: flex; gap: 7px; flex-wrap: wrap; max-width: 70%; }
+    .legend span { background: rgba(13,16,20,.88); border: 1px solid #252a32; color: #8e98a7; border-radius: 999px; padding: 5px 8px; font-size: 10px; backdrop-filter: blur(8px); }
+    .toolbar { position: absolute; top: 14px; left: 14px; display: flex; gap: 8px; }
+    .ghost { background: rgba(13,16,20,.86); color: #aab3c0; border: 1px solid #252a32; padding: 8px 10px; font-weight: 500; backdrop-filter: blur(8px); }
+    .edge { stroke: #343a44; stroke-width: 1; opacity: .75; }
+    .edge-label { fill: #5f6a79; font-size: 9px; pointer-events: none; }
+    .node { cursor: pointer; }
+    .node circle { fill: #141922; stroke: #778296; stroke-width: 1.25; transition: .15s ease; }
+    .node:hover circle, .node.selected circle { fill: #1b2230; stroke: #e7e9ed; stroke-width: 1.5; }
+    .node text { fill: #d5d9e0; font-size: 10px; pointer-events: none; }
+    @media (max-width: 800px) { .shell { grid-template-columns: 1fr; } aside { display: none; } }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand"><div class="mark">C</div><div>Casuar Graph</div></div>
+    <div class="status" id="status">Disconnected</div>
+  </header>
+  <main class="shell">
+    <section class="graph-wrap">
+      <svg id="graph" aria-label="Casuar knowledge graph"></svg>
+      <div class="toolbar"><button class="ghost" id="reload">Reload</button><button class="ghost" id="logout">Forget token</button></div>
+      <div class="legend" id="legend"></div>
+      <div class="auth" id="auth">
+        <div class="card">
+          <h1>Connect to Casuar</h1>
+          <p>The visualizer is read-only. Graph data stays behind Casuar bearer authentication and the token is kept only for this browser session.</p>
+          <div class="field"><input id="token" type="password" autocomplete="off" placeholder="Bearer token" /><button id="connect">Connect</button></div>
+          <p id="authError" style="margin-top:10px;color:#c78383"></p>
+        </div>
+      </div>
+      <div class="empty" id="empty" hidden>
+        <div class="card"><h1>No graph yet</h1><p>Casuar is connected correctly, but there are no canonical objects or object-to-object claims to visualize yet.</p></div>
+      </div>
+    </section>
+    <aside>
+      <div class="eyebrow">Inspector</div>
+      <h2 id="detailTitle">Select a node</h2>
+      <p id="detailDescription">Click any object in the graph to inspect its canonical metadata.</p>
+      <div class="kind" id="detailKind" hidden></div>
+      <div class="meta" id="detailMeta"></div>
+    </aside>
+  </main>
+<script>
+  const svg = document.getElementById('graph');
+  const auth = document.getElementById('auth');
+  const empty = document.getElementById('empty');
+  const statusEl = document.getElementById('status');
+  const tokenInput = document.getElementById('token');
+  const authError = document.getElementById('authError');
+  let graph = { nodes: [], edges: [] };
+  let selectedId = null;
+
+  const tokenKey = 'casuar_graph_token';
+  const getToken = () => sessionStorage.getItem(tokenKey) || '';
+
+  async function loadGraph(token = getToken()) {
+    if (!token) { auth.hidden = false; return; }
+    statusEl.textContent = 'Loading…';
+    authError.textContent = '';
+    try {
+      const res = await fetch('/api/graph', { headers: { Authorization: `Bearer ${token}` } });
+      if (res.status === 401) throw new Error('Invalid or expired token');
+      if (!res.ok) throw new Error(`Graph request failed (${res.status})`);
+      graph = await res.json();
+      sessionStorage.setItem(tokenKey, token);
+      auth.hidden = true;
+      empty.hidden = graph.nodes.length !== 0;
+      statusEl.textContent = `${graph.nodes.length} nodes · ${graph.edges.length} edges`;
+      render();
+    } catch (error) {
+      statusEl.textContent = 'Disconnected';
+      auth.hidden = false;
+      authError.textContent = error.message;
+    }
+  }
+
+  function layout(nodes, edges, width, height) {
+    const cx = width / 2, cy = height / 2;
+    const items = nodes.map((node, i) => ({
+      ...node,
+      x: cx + Math.cos((i / Math.max(nodes.length, 1)) * Math.PI * 2) * Math.min(width, height) * .27,
+      y: cy + Math.sin((i / Math.max(nodes.length, 1)) * Math.PI * 2) * Math.min(width, height) * .27,
+      vx: 0, vy: 0,
+    }));
+    const byId = new Map(items.map(n => [n.id, n]));
+    for (let step = 0; step < 180; step++) {
+      for (let i = 0; i < items.length; i++) {
+        for (let j = i + 1; j < items.length; j++) {
+          const a = items[i], b = items[j];
+          let dx = b.x - a.x, dy = b.y - a.y;
+          const d2 = Math.max(dx*dx + dy*dy, 120);
+          const f = 950 / d2;
+          const d = Math.sqrt(d2);
+          dx /= d; dy /= d;
+          a.vx -= dx*f; a.vy -= dy*f; b.vx += dx*f; b.vy += dy*f;
+        }
+      }
+      for (const edge of edges) {
+        const a = byId.get(edge.source), b = byId.get(edge.target);
+        if (!a || !b) continue;
+        let dx = b.x-a.x, dy = b.y-a.y;
+        const d = Math.max(Math.sqrt(dx*dx+dy*dy), 1);
+        const f = (d - 135) * .003;
+        dx /= d; dy /= d;
+        a.vx += dx*f; a.vy += dy*f; b.vx -= dx*f; b.vy -= dy*f;
+      }
+      for (const n of items) {
+        n.vx += (cx-n.x) * .0008; n.vy += (cy-n.y) * .0008;
+        n.vx *= .82; n.vy *= .82;
+        n.x = Math.max(38, Math.min(width-38, n.x+n.vx));
+        n.y = Math.max(38, Math.min(height-38, n.y+n.vy));
+      }
+    }
+    return items;
+  }
+
+  function render() {
+    const rect = svg.getBoundingClientRect();
+    const width = Math.max(rect.width, 320), height = Math.max(rect.height, 320);
+    svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+    const nodes = layout(graph.nodes, graph.edges, width, height);
+    const byId = new Map(nodes.map(n => [n.id, n]));
+    svg.replaceChildren();
+
+    for (const edge of graph.edges) {
+      const a = byId.get(edge.source), b = byId.get(edge.target);
+      if (!a || !b) continue;
+      const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      line.setAttribute('x1', a.x); line.setAttribute('y1', a.y); line.setAttribute('x2', b.x); line.setAttribute('y2', b.y); line.setAttribute('class', 'edge');
+      svg.append(line);
+      const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      label.setAttribute('x', (a.x+b.x)/2); label.setAttribute('y', (a.y+b.y)/2 - 4); label.setAttribute('text-anchor', 'middle'); label.setAttribute('class', 'edge-label'); label.textContent = edge.relation;
+      svg.append(label);
+    }
+
+    for (const node of nodes) {
+      const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      g.setAttribute('class', `node${node.id === selectedId ? ' selected' : ''}`);
+      g.setAttribute('transform', `translate(${node.x} ${node.y})`);
+      const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      circle.setAttribute('r', node.kind === 'concept' ? 11 : 8);
+      const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      text.setAttribute('x', 16); text.setAttribute('y', 3); text.textContent = node.label;
+      g.append(circle, text);
+      g.addEventListener('click', () => selectNode(node));
+      svg.append(g);
+    }
+
+    const kinds = [...new Set(graph.nodes.map(n => n.kind))].sort();
+    document.getElementById('legend').innerHTML = kinds.map(k => `<span>${k}</span>`).join('');
+  }
+
+  function selectNode(node) {
+    selectedId = node.id;
+    document.getElementById('detailTitle').textContent = node.label;
+    document.getElementById('detailDescription').textContent = node.description || 'No description.';
+    const kind = document.getElementById('detailKind'); kind.hidden = false; kind.textContent = node.kind;
+    const connected = graph.edges.filter(e => e.source === node.id || e.target === node.id);
+    document.getElementById('detailMeta').innerHTML = `
+      <div class="row"><span>Key</span><div>${escapeHtml(node.key)}</div></div>
+      <div class="row"><span>Connections</span><div>${connected.length}</div></div>
+      <div class="row"><span>Attributes</span><pre>${escapeHtml(JSON.stringify(node.attributes || {}, null, 2))}</pre></div>`;
+    render();
+  }
+
+  function escapeHtml(value) { return String(value).replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])); }
+
+  document.getElementById('connect').onclick = () => loadGraph(tokenInput.value.trim());
+  tokenInput.addEventListener('keydown', e => { if (e.key === 'Enter') loadGraph(tokenInput.value.trim()); });
+  document.getElementById('reload').onclick = () => loadGraph();
+  document.getElementById('logout').onclick = () => { sessionStorage.removeItem(tokenKey); graph = {nodes:[],edges:[]}; svg.replaceChildren(); statusEl.textContent='Disconnected'; auth.hidden=false; };
+  window.addEventListener('resize', () => graph.nodes.length && render());
+  loadGraph();
+</script>
+</body>
+</html>
