@@ -51,7 +51,10 @@ async function ensureConcept(input: {
 }) {
   const existing = await rows<any>(target.from('objects').select('id').eq('key', input.key).limit(1));
   let id = existing[0]?.id as string | undefined;
-  if (!id && !dryRun) {
+
+  if (!id && dryRun) return `dry-run:${input.key}`;
+
+  if (!id) {
     const { data, error } = await target
       .from('objects')
       .insert({
@@ -66,10 +69,9 @@ async function ensureConcept(input: {
     if (error) throw new Error(error.message);
     id = data.id;
   }
-  if (!id) id = `dry-run:${input.key}`;
 
   const concept = await rows<any>(target.from('concepts').select('object_id').eq('object_id', id).limit(1));
-  if (!concept[0] && !dryRun) {
+  if (!concept[0]) {
     const { error } = await target.from('concepts').insert({
       object_id: id,
       semantic_type: input.semanticType,
@@ -234,7 +236,8 @@ async function foodConceptByLegacyId(legacyId: string) {
   const objects = await rows<any>(
     target.from('objects').select('id,attributes').contains('attributes', { legacy_id: legacyId }).limit(1)
   );
-  return objects[0]?.id as string | undefined;
+  if (objects[0]) return objects[0].id as string;
+  return dryRun ? `dry-run:food:${legacyId}` : undefined;
 }
 
 async function diaryEntryTime(entryId: string) {
