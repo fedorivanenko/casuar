@@ -20,10 +20,9 @@
     h1, h2, p { margin: 0; }
     h1 { font-size: 18px; margin-bottom: 7px; }
     p { color: #98a2b2; line-height: 1.5; font-size: 14px; }
-    .field { display: flex; gap: 8px; margin-top: 18px; }
-    input { min-width: 0; flex: 1; background: #0b0d10; color: white; border: 1px solid #2a3039; border-radius: 10px; padding: 11px 12px; outline: none; }
-    input:focus { border-color: #566273; }
+    .actions { display: flex; gap: 8px; margin-top: 18px; }
     button { border: 0; border-radius: 10px; padding: 11px 14px; background: #f4f4f5; color: #111317; font-weight: 650; cursor: pointer; }
+    button:disabled { opacity: .55; cursor: default; }
     aside { border-left: 1px solid #20242b; background: #0d1014; padding: 18px; overflow: auto; }
     .eyebrow { color: #727d8c; text-transform: uppercase; letter-spacing: .12em; font-size: 10px; margin-bottom: 8px; }
     #detailTitle { font-size: 18px; margin-bottom: 6px; word-break: break-word; }
@@ -53,13 +52,13 @@
   <main class="shell">
     <section class="graph-wrap">
       <svg id="graph" aria-label="Casuar knowledge graph"></svg>
-      <div class="toolbar"><button class="ghost" id="reload">Reload</button><button class="ghost" id="logout">Forget token</button></div>
+      <div class="toolbar"><button class="ghost" id="reload">Reload</button><button class="ghost" id="logout">Disconnect</button></div>
       <div class="legend" id="legend"></div>
       <div class="auth" id="auth">
         <div class="card">
           <h1>Connect to Casuar</h1>
-          <p>The visualizer is read-only. Graph data stays behind Casuar bearer authentication and the token is kept only for this browser session.</p>
-          <div class="field"><input id="token" type="password" autocomplete="off" placeholder="Bearer token" /><button id="connect">Connect</button></div>
+          <p>Authorize this read-only visualizer through Casuar. Your access token stays only in this browser session and expires automatically.</p>
+          <div class="actions"><button id="connect">Authorize Casuar</button></div>
           <p id="authError" style="margin-top:10px;color:#c78383"></p>
         </div>
       </div>
@@ -80,24 +79,129 @@
   const auth = document.getElementById('auth');
   const empty = document.getElementById('empty');
   const statusEl = document.getElementById('status');
-  const tokenInput = document.getElementById('token');
   const authError = document.getElementById('authError');
+  const connectButton = document.getElementById('connect');
   let graph = { nodes: [], edges: [] };
   let selectedId = null;
 
-  const tokenKey = 'casuar_graph_token';
-  const getToken = () => sessionStorage.getItem(tokenKey) || '';
+  const storage = {
+    token: 'casuar_graph_access_token',
+    verifier: 'casuar_graph_pkce_verifier',
+    clientId: 'casuar_graph_client_id',
+    state: 'casuar_graph_oauth_state',
+  };
+  const redirectUri = `${window.location.origin}/`;
+  const getToken = () => sessionStorage.getItem(storage.token) || '';
+
+  function randomUrlSafe(bytes = 32) {
+    const data = new Uint8Array(bytes);
+    crypto.getRandomValues(data);
+    return btoa(String.fromCharCode(...data)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+
+  async function sha256UrlSafe(value) {
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
+    return btoa(String.fromCharCode(...new Uint8Array(digest))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+
+  async function beginAuthorization() {
+    connectButton.disabled = true;
+    authError.textContent = '';
+    statusEl.textContent = 'Authorizing…';
+    try {
+      const registration = await fetch('/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          redirect_uris: [redirectUri],
+          grant_types: ['authorization_code'],
+          response_types: ['code'],
+          token_endpoint_auth_method: 'none'
+        })
+      });
+      if (!registration.ok) throw new Error(`Client registration failed (${registration.status})`);
+      const client = await registration.json();
+      const verifier = randomUrlSafe(48);
+      const challenge = await sha256UrlSafe(verifier);
+      const state = randomUrlSafe(24);
+      sessionStorage.setItem(storage.verifier, verifier);
+      sessionStorage.setItem(storage.clientId, client.client_id);
+      sessionStorage.setItem(storage.state, state);
+
+      const url = new URL('/authorize', window.location.origin);
+      url.searchParams.set('client_id', client.client_id);
+      url.searchParams.set('redirect_uri', redirectUri);
+      url.searchParams.set('response_type', 'code');
+      url.searchParams.set('code_challenge', challenge);
+      url.searchParams.set('code_challenge_method', 'S256');
+      url.searchParams.set('scope', 'casuar:read');
+      url.searchParams.set('state', state);
+      window.location.assign(url.toString());
+    } catch (error) {
+      statusEl.textContent = 'Disconnected';
+      authError.textContent = error instanceof Error ? error.message : 'Authorization failed';
+      connectButton.disabled = false;
+    }
+  }
+
+  async function finishAuthorization() {
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get('code');
+    if (!code) return false;
+
+    const returnedState = params.get('state') || '';
+    const expectedState = sessionStorage.getItem(storage.state) || '';
+    const verifier = sessionStorage.getItem(storage.verifier) || '';
+    const clientId = sessionStorage.getItem(storage.clientId) || '';
+    history.replaceState({}, '', redirectUri);
+
+    if (!expectedState || returnedState !== expectedState || !verifier || !clientId) {
+      throw new Error('OAuth session could not be verified. Please authorize again.');
+    }
+
+    statusEl.textContent = 'Connecting…';
+    const form = new URLSearchParams({
+      grant_type: 'authorization_code',
+      code,
+      code_verifier: verifier,
+      client_id: clientId,
+      redirect_uri: redirectUri,
+    });
+    const response = await fetch('/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: form,
+    });
+    if (!response.ok) throw new Error(`Token exchange failed (${response.status})`);
+    const result = await response.json();
+    if (!result.access_token) throw new Error('Token exchange returned no access token');
+    sessionStorage.setItem(storage.token, result.access_token);
+    sessionStorage.removeItem(storage.verifier);
+    sessionStorage.removeItem(storage.clientId);
+    sessionStorage.removeItem(storage.state);
+    return true;
+  }
+
+  function clearAuth() {
+    Object.values(storage).forEach((key) => sessionStorage.removeItem(key));
+  }
 
   async function loadGraph(token = getToken()) {
-    if (!token) { auth.hidden = false; return; }
+    if (!token) { auth.hidden = false; statusEl.textContent = 'Disconnected'; return; }
     statusEl.textContent = 'Loading…';
     authError.textContent = '';
     try {
       const res = await fetch('/api/graph', { headers: { Authorization: `Bearer ${token}` } });
-      if (res.status === 401) throw new Error('Invalid or expired token');
-      if (!res.ok) throw new Error(`Graph request failed (${res.status})`);
+      if (res.status === 401) {
+        clearAuth();
+        throw new Error('Your Casuar session expired. Please authorize again.');
+      }
+      if (!res.ok) {
+        let detail = '';
+        try { detail = (await res.json()).error || ''; } catch {}
+        throw new Error(`Graph request failed (${res.status})${detail ? `: ${detail}` : ''}`);
+      }
       graph = await res.json();
-      sessionStorage.setItem(tokenKey, token);
       auth.hidden = true;
       empty.hidden = graph.nodes.length !== 0;
       statusEl.textContent = `${graph.nodes.length} nodes · ${graph.edges.length} edges`;
@@ -105,7 +209,7 @@
     } catch (error) {
       statusEl.textContent = 'Disconnected';
       auth.hidden = false;
-      authError.textContent = error.message;
+      authError.textContent = error instanceof Error ? error.message : 'Could not load graph';
     }
   }
 
@@ -182,7 +286,7 @@
     }
 
     const kinds = [...new Set(graph.nodes.map(n => n.kind))].sort();
-    document.getElementById('legend').innerHTML = kinds.map(k => `<span>${k}</span>`).join('');
+    document.getElementById('legend').innerHTML = kinds.map(k => `<span>${escapeHtml(k)}</span>`).join('');
   }
 
   function selectNode(node) {
@@ -200,12 +304,26 @@
 
   function escapeHtml(value) { return String(value).replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])); }
 
-  document.getElementById('connect').onclick = () => loadGraph(tokenInput.value.trim());
-  tokenInput.addEventListener('keydown', e => { if (e.key === 'Enter') loadGraph(tokenInput.value.trim()); });
+  connectButton.onclick = beginAuthorization;
   document.getElementById('reload').onclick = () => loadGraph();
-  document.getElementById('logout').onclick = () => { sessionStorage.removeItem(tokenKey); graph = {nodes:[],edges:[]}; svg.replaceChildren(); statusEl.textContent='Disconnected'; auth.hidden=false; };
+  document.getElementById('logout').onclick = () => {
+    clearAuth();
+    graph = {nodes:[],edges:[]};
+    svg.replaceChildren();
+    statusEl.textContent='Disconnected';
+    auth.hidden=false;
+  };
   window.addEventListener('resize', () => graph.nodes.length && render());
-  loadGraph();
+
+  (async () => {
+    try {
+      await finishAuthorization();
+    } catch (error) {
+      clearAuth();
+      authError.textContent = error instanceof Error ? error.message : 'Authorization failed';
+    }
+    await loadGraph();
+  })();
 </script>
 </body>
 </html>
