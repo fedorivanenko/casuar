@@ -1,5 +1,8 @@
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 
+const ACCESS_TOKEN_TTL_SECONDS = 3600;
+const REFRESH_TOKEN_TTL_SECONDS = 60 * 60 * 24 * 90;
+
 function secret() {
   const value = process.env.CASUAR_MCP_TOKEN;
   if (!value) throw new Error('Missing CASUAR_MCP_TOKEN');
@@ -64,12 +67,51 @@ export function exchangeAuthorizationCode(code: string, verifier: string, client
   if (payload.clientId !== clientId || payload.redirectUri !== redirectUri) return null;
   const challenge = createHash('sha256').update(verifier).digest('base64url');
   if (challenge !== payload.codeChallenge) return null;
-  return issueAccessToken(payload.clientId, payload.scope);
+  return issueTokenPair(payload.clientId, payload.scope);
 }
 
 export function issueAccessToken(clientId: string, scope: string) {
   const now = Math.floor(Date.now() / 1000);
-  return signPayload({ typ: 'access', clientId, scope, iat: now, exp: now + 3600, aud: 'casuar-mcp' });
+  return signPayload({
+    typ: 'access',
+    clientId,
+    scope,
+    iat: now,
+    exp: now + ACCESS_TOKEN_TTL_SECONDS,
+    aud: 'casuar-mcp'
+  });
+}
+
+export function issueRefreshToken(clientId: string, scope: string) {
+  const now = Math.floor(Date.now() / 1000);
+  return signPayload({
+    typ: 'refresh',
+    clientId,
+    scope,
+    iat: now,
+    exp: now + REFRESH_TOKEN_TTL_SECONDS,
+    aud: 'casuar-mcp'
+  });
+}
+
+export function issueTokenPair(clientId: string, scope: string) {
+  return {
+    accessToken: issueAccessToken(clientId, scope),
+    refreshToken: issueRefreshToken(clientId, scope)
+  };
+}
+
+export function exchangeRefreshToken(refreshToken: string, clientId: string) {
+  const payload = verifySigned<{
+    typ: string;
+    clientId: string;
+    scope: string;
+    exp: number;
+    aud: string;
+  }>(refreshToken);
+  if (!payload || payload.typ !== 'refresh' || payload.aud !== 'casuar-mcp') return null;
+  if (payload.clientId !== clientId) return null;
+  return issueTokenPair(payload.clientId, payload.scope);
 }
 
 export function verifyAccessToken(token: string) {
