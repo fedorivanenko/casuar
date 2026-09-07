@@ -1,3 +1,4 @@
 from causal_runtime.endpoint import Handler
 
-handler = Handler
+class handler(Handler):
+    pass
