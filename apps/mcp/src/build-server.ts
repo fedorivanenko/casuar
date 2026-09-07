@@ -1,3 +1,4 @@
+import { registerCausalTools } from './causal-tools.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { createCasuarDb } from '../../../packages/db/src/client.js';
@@ -12,7 +13,7 @@ function text(value: unknown) {
 export function buildCasuarMcpServer() {
   const db = createCasuarDb();
   const service = new CasuarService(db);
-  const server = new McpServer({ name: 'casuar', version: '0.5.0' });
+  const server = new McpServer({ name: 'casuar', version: '0.6.0' });
 
   async function deleteById(table: string, id: string) {
     const { data, error } = await db.from(table).delete().eq('id', id).select('*').maybeSingle();
@@ -239,5 +240,6 @@ export function buildCasuarMcpServer() {
     evidenceId: z.string().uuid()
   }, async ({ evidenceId }) => text(await deleteById('claim_evidence', evidenceId)));
 
+  registerCausalTools(server);
   return server;
 }

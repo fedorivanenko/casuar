@@ -1,18 +1,45 @@
 {
   "rewrites": [
-    { "source": "/mcp", "destination": "/api/mcp" },
-    { "source": "/authorize", "destination": "/api/oauth-authorize" },
-    { "source": "/token", "destination": "/api/oauth-token" },
-    { "source": "/register", "destination": "/api/oauth-register" }
+    {
+      "source": "/mcp",
+      "destination": "/api/mcp"
+    },
+    {
+      "source": "/authorize",
+      "destination": "/api/oauth-authorize"
+    },
+    {
+      "source": "/token",
+      "destination": "/api/oauth-token"
+    },
+    {
+      "source": "/register",
+      "destination": "/api/oauth-register"
+    }
   ],
   "headers": [
     {
       "source": "/.well-known/oauth-authorization-server",
-      "headers": [{ "key": "Content-Type", "value": "application/json" }]
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "application/json"
+        }
+      ]
     },
     {
       "source": "/.well-known/oauth-protected-resource/mcp",
-      "headers": [{ "key": "Content-Type", "value": "application/json" }]
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "application/json"
+        }
+      ]
     }
-  ]
+  ],
+  "functions": {
+    "api/causal-run.py": {
+      "maxDuration": 60
+    }
+  }
 }

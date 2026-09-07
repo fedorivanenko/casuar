@@ -30,3 +30,22 @@ Agents operate through semantic tools such as `get_object`, `create_observation`
 ## Current status
 
 This repository is a clean architecture reset. `supabase/migrations` defines the canonical v1 storage model. Data from the legacy Supabase project should be migrated selectively rather than copying legacy schemas wholesale.
+
+## Tiny causal runner
+
+MCP tool `run_model` forwards to the Python function `/api/causal-run` on this same
+Vercel project. It uses a purpose-derived key from the existing `CASUAR_MCP_TOKEN`;
+no new secret is needed for co-located execution. The endpoint denies unauthenticated
+requests. `causal_runtime/UPSTREAM.md` records the engine source and pinned revision.
+
+Omit model/model_id for the synthetic demo, or pass an explicit arithmetic model.
+`persist: false` is the inline/demo default, clearly reported in the result. Stored
+models and persistence require private `DATABASE_URL` plus the upstream `schema.sql`.
+The existing Supabase REST credentials alone do not configure this Postgres path.
+
+Optional `CASUAR_CAUSAL_RUN_URL` overrides the production Python endpoint (HTTPS only).
+Use it for an independent engine deployment with the same private secret. The default
+is https://casuar-jet.vercel.app/api/causal-run; preview MCP deployments also call this
+production endpoint unless overridden. Do not use real patient data in preview tests.
+
+After deployment, refresh the Casuar connector's tool list to discover `run_model`.
