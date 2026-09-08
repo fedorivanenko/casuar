@@ -1,0 +1,14 @@
+{
+  "name": "hpylori-bridge-objective",
+  "kind": "objective",
+  "context": "Patient must bridge 3–5 months before definitive work-up.",
+  "requiredObjectives": [
+    "pathogen_pressure",
+    "mucosal_injury",
+    "progression_risk",
+    "systemic_consequences",
+    "adverse_effects",
+    "diagnostic_information"
+  ],
+  "antiPattern": "Optimize only eradication probability."
+}
