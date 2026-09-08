@@ -6,13 +6,10 @@
     "typecheck": "tsc --noEmit",
     "dev:mcp": "tsx apps/mcp/src/server.ts",
     "wind-tunnel:glutamine": "tsx scripts/run-wind-tunnel.ts hpylori-glutamine",
-    "wind-tunnel:bridge": "tsx scripts/run-wind-tunnel.ts hpylori-bridge-objective",
-    "migrate:food-diary": "tsx scripts/migrate-food-diary.ts",
-    "migrate:food-diary:dry-run": "tsx scripts/migrate-food-diary.ts --dry-run"
+    "wind-tunnel:bridge": "tsx scripts/run-wind-tunnel.ts hpylori-bridge-objective"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.17.4",
-    "@supabase/supabase-js": "^2.57.0",
     "ai": "^5.0.0",
     "zod": "^3.25.76"
   },
