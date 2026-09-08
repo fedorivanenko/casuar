@@ -1,6 +1,7 @@
 import { createHmac } from 'node:crypto';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
+import { registerWindTunnelTools } from './wind-tunnel-tools.js';
 
 export async function invokeCausalRun(input: Record<string, unknown>) {
   const secret = process.env.CASUAR_MCP_TOKEN;
@@ -18,7 +19,6 @@ export async function invokeCausalRun(input: Record<string, unknown>) {
     redirect: 'error'
   });
   if (!response.ok) {
-    // Never return upstream HTML, secrets, database errors, or request bodies.
     throw new Error(`Causal run failed (HTTP ${response.status}); check model limits or service/database configuration`);
   }
   return await response.json();
@@ -51,4 +51,6 @@ export function registerCausalTools(server: McpServer) {
         return { isError: true, content: [{ type: 'text' as const, text: error instanceof Error ? error.message : 'Causal run failed' }] };
       }
     });
+
+  registerWindTunnelTools(server);
 }
