@@ -1,0 +1,16 @@
+{
+  "name": "hpylori-glutamine-coverage",
+  "kind": "coverage",
+  "seedGraph": {
+    "nodes": [
+      {"id":"h_pylori","label":"H. pylori"},
+      {"id":"ggt","label":"GGT / glutaminase activity"},
+      {"id":"epithelial_injury","label":"gastric epithelial injury"}
+    ],
+    "edges": [
+      {"from":"h_pylori","to":"ggt"},
+      {"from":"ggt","to":"epithelial_injury"}
+    ]
+  },
+  "passCondition": "Fresh graph expansion independently discovers glutamine depletion/restoration in mechanistic context."
+}
